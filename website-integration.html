@@ -1,0 +1,276 @@
+<link rel='stylesheet' id='leafletstyle-css'  href='http://austinanderson.com/predictit/leaflet.css' type='text/css' media='all' />
+<script type='text/javascript' src='http://austinanderson.com/predictit/leaflet.js></script>
+
+<!–– to get these included in Wordpress, add to your theme's functions.php using the theme editor  -->
+<!--  wp_enqueue_script('leaflet','http://austinanderson.com/predictit/leaflet.js'); -->
+<!--  wp_enqueue_style('leafletstyle','http://austinanderson.com/predictit/leaflet.css'); -->
+<!-- I guess there's no reason you couldn't add them with the loadScript function below -->
+
+		
+
+
+<style type="text/css">
+    #map {
+        margin: auto;
+        height:50%;
+        border: 2px dashed black;
+        position:relative;
+        margin-top:0px;
+        width: 800px;
+	height: 500px;
+    }       
+		
+#stlabel {
+			color: #777;
+		}
+</style>
+
+
+<p id="map"> </p>
+
+
+<script type="text/javascript>
+
+jQuery(document).ready(function ($) {
+
+
+function loadScript(url, callback)
+{
+    // Adding the script tag to the head as suggested before
+    var head = document.getElementsByTagName('head')[0];
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = url;
+	script.async = false;
+
+    // Then bind the event to the callback function.
+    // There are several events for cross browser compatibility.
+    script.onreadystatechange = callback;
+    script.onload = callback;
+
+    // Fire the loading
+    head.appendChild(script);
+};
+
+
+	var renderLLMAP = function() {
+var getCentroid2 = function (arr) {
+    var twoTimesSignedArea = 0;
+    var cxTimes6SignedArea = 0;
+    var cyTimes6SignedArea = 0;
+
+    var length = arr.length
+
+    var x = function (i) { return arr[i % length][0] };
+    var y = function (i) { return arr[i % length][1] };
+
+    for ( var i = 0; i < arr.length; i++) {
+        var twoSA = x(i)*y(i+1) - x(i+1)*y(i);
+        twoTimesSignedArea += twoSA;
+        cxTimes6SignedArea += (x(i) + x(i+1)) * twoSA;
+        cyTimes6SignedArea += (y(i) + y(i+1)) * twoSA;
+    }
+    var sixSignedArea = 3 * twoTimesSignedArea;
+    return [ cxTimes6SignedArea / sixSignedArea, cyTimes6SignedArea / sixSignedArea];        
+}
+    if($(window).width()<=800){
+
+        $('#map').css("height", (500*$(window).width()/800));    
+        $('#map').css("margin-top",50);
+        $('#map').css("width", ($(window).width()));
+    }
+
+		var map = L.map('map', {
+            center: [39, -96],
+            zoom: 4.25,
+            zoomSnap: 0.05,
+            attributionControl: false,
+            zoomControl: false
+        });
+        
+		map.dragging.disable();
+		map.scrollWheelZoom.disable()
+
+		// control that shows state info on hover
+		var info = L.control();
+
+		info.onAdd = function (map) {
+			this._div = L.DomUtil.create('div', 'info');
+			this.update();
+			return this._div;
+		};
+
+		info.update = function (props) {
+			this._div.innerHTML = (props ?
+				'<b>' + props.poptxt +'</b><br />'
+				: 'Hover over a state');
+		};
+
+		info.addTo(map);
+
+
+		// get color depending on population density value
+		function getColor(d) {
+			return d > .90 ? '#5555FF' :
+			       d > .75  ? '#9999FF' :
+			       d > .60  ? '#BBBBFF' :
+			       d > .40  ? '#FFFFFF' :
+			       d > .25   ? '#FFBBBB' :
+			       d > .10   ? '#FF9999' :
+			       d > 0   ? '#FF5555' :
+			                  '#999999';
+		}
+
+		function style(feature) {
+			return {
+				weight: .2,
+				opacity: 1,
+				color: 'black',
+				fillOpacity: 0.7,
+				fillColor: getColor(feature.properties.probs)
+			};
+		}
+
+		function highlightFeature(e) {
+			var layer = e.target;
+
+			layer.setStyle({
+				weight: 1,
+				color: '#666',
+				dashArray: '',
+				fillOpacity: 0.7
+			});
+
+			if (!L.Browser.ie && !L.Browser.opera) {
+				layer.bringToFront();
+			}
+
+			info.update(layer.feature.properties);
+		}
+
+		var geojson;
+
+		function resetHighlight(e) {
+			geojson.resetStyle(e.target);
+			info.update();
+                        where.update();
+		}
+
+                function gotopolls(e) {
+			location.href=e.target.feature.properties.urlto;
+		}
+
+		function zoomToFeature(e) {
+			map.fitBounds(e.target.getBounds());
+			if((map.getBounds().getSouth()>-125.5)&&(map.getBounds().getSouth()<-125.3)){
+			    map.fitBounds(e.target.getBounds());
+			}else{
+				map.fitBounds([
+    [23.4, -125.4],
+    [51.8, -66.6]
+]);
+			}
+		}
+
+		function onEachFeature(feature, layer) {
+			layer.on({
+				mouseover: highlightFeature,
+                                click: gotopolls
+			});
+                        var label = L.marker(L.latLng(feature.properties.centy,feature.properties.centx), {
+      icon: L.divIcon({
+        className: 'label',
+        html: feature.properties.stname,
+        iconAnchor: [10, 7],
+        className: 'stlabel'
+      })
+    },{clickable: false}).addTo(map);
+
+		}
+
+		geojson = L.geoJson(statesData, {
+			style: style,
+			onEachFeature: onEachFeature,
+			smoothFactor: 0
+		}).addTo(map);
+
+		
+		var legend = L.control({position: 'bottomright'});
+
+		legend.onAdd = function (map) {
+
+			var div = L.DomUtil.create('div', 'info legend'),
+				grades = [0,.10, .25, .40, .60, .75, .9,1],
+				labels = [],
+				from, to;
+
+			for (var i = 0; i < grades.length-1; i++) {
+				from = grades[i];
+				to = grades[i + 1];
+
+				labels.push(
+					'<i style="background:' + getColor(from+.001) + '"></i> ' +
+					from + (to ? '&ndash;' + to : '+'));
+			}
+
+			div.innerHTML = labels.join('<br>');
+			return div;
+		};
+
+		
+
+                var where = L.control({position: 'bottomleft'});
+
+                where.onAdd = function (map) {
+			this._div = L.DomUtil.create('div', 'info');
+			this.update();
+			return this._div;
+		};
+
+		where.update = function (props) {
+			this._div.innerHTML =  map.getBounds().getNorth()+'<br>'+map.getBounds().getSouth()+'<br>'+map.getBounds().getEast()+'<br>'+map.getBounds().getWest()+'<br>';
+		};
+
+	       
+map.fitBounds([
+    [23.4, -125.4],
+    [51.8, -66.6]
+]);
+
+
+$(window).on("resize", resize);
+$(window).on("load", resize);
+function resize(){
+
+    if($(window).width()<=800){
+
+        $('#map').css("height", (500*$(window).width()/800));    
+        $('#map').css("margin-top",50);
+        $('#map').css("width", ($(window).width()));
+    }
+if($(window).height()<=500){
+
+        $('#map').css("height", ($(window).height()-66));    
+        $('#map').css("margin-top",50);
+        $('#map').css("width", (800*($(window).height()-66)/500));
+    }
+
+map.fitBounds([
+    [23.4, -125.4],
+    [51.8, -66.6]
+]);
+
+}
+map.fitBounds([
+    [23.4, -125.4],
+    [51.8, -66.6]
+]);
+resize();
+window.onorientationchange = resize;
+};	
+	loadScript("http://austinanderson.com/predictit/predictit.geojson", renderLLMAP);	
+
+
+	});
+
+</script>
